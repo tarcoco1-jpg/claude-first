@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>최적 가격 찾기 — 이익 극대화 모델</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      padding: 32px 40px 16px;
+      border-bottom: 1px solid #1e2330;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 600; color: #f8fafc; }
+    header p  { font-size: 0.85rem; color: #64748b; margin-top: 4px; }
+    .context-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 10px;
+      background: #1e2a3a;
+      border: 1px solid #2d4060;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: #60a5fa;
+    }
+
+    .main { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 90px); }
+
+    /* ── 왼쪽 패널 ── */
+    .panel {
+      padding: 28px 24px;
+      border-right: 1px solid #1e2330;
+      overflow-y: auto;
+    }
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #475569;
+      margin-bottom: 16px;
+    }
+    .param-group { margin-bottom: 28px; }
+    .param-row { margin-bottom: 18px; }
+    .param-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+    .param-label span { font-weight: 600; color: #f1f5f9; }
+    .param-sub { font-size: 0.7rem; color: #475569; margin-bottom: 5px; }
+    input[type=range] {
+      width: 100%;
+      accent-color: #3b82f6;
+      cursor: pointer;
+      height: 4px;
+    }
+
+    .result-card {
+      background: #141820;
+      border: 1px solid #1e2a3a;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .result-card.highlight {
+      border-color: #3b82f6;
+      background: #0d1f35;
+    }
+    .result-card .label { font-size: 0.72rem; color: #64748b; margin-bottom: 4px; }
+    .result-card .value { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+    .result-card .value.blue  { color: #60a5fa; }
+    .result-card .value.green { color: #34d399; }
+    .result-card .value.red   { color: #f87171; }
+    .result-card .sub { font-size: 0.72rem; color: #475569; margin-top: 3px; }
+
+    .formula-box {
+      background: #0d1117;
+      border: 1px solid #1e2330;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      line-height: 1.8;
+      margin-top: 8px;
+    }
+    .formula-box .hi { color: #7dd3fc; }
+
+    /* ── 오른쪽 차트 영역 ── */
+    .chart-area {
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+    .chart-wrap {
+      background: #141820;
+      border: 1px solid #1e2330;
+      border-radius: 12px;
+      padding: 20px 24px 16px;
+      flex: 1;
+      min-height: 280px;
+      position: relative;
+    }
+    .chart-title { font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px; }
+    canvas { width: 100% !important; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .insight-box {
+      background: #141820;
+      border: 1px solid #1e2330;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .insight-box h3 { font-size: 0.78rem; color: #94a3b8; margin-bottom: 10px; }
+    .insight-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; margin-top: 6px; flex-shrink: 0; }
+
+    .ref-list { font-size: 0.72rem; color: #475569; line-height: 1.8; }
+    .ref-list a { color: #3b82f6; text-decoration: none; }
+
+    @media (max-width: 800px) {
+      .main { grid-template-columns: 1fr; height: auto; }
+      .panel { border-right: none; border-bottom: 1px solid #1e2330; }
+      .grid2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>최적 가격 찾기 — 이익 극대화 모델</h1>
+  <p>가격 탄력성과 비용 구조를 고려한 최적 가격 도출 · Price Elasticity + Cost Model</p>
+  <span class="context-badge">파라미터를 조정하면 실시간으로 최적해가 갱신됩니다</span>
+</header>
+
+<div class="main">
+  <!-- ── 파라미터 패널 ── -->
+  <div class="panel">
+    <div class="section-title">모델 파라미터</div>
+
+    <div class="param-group">
+      <div class="param-row">
+        <div class="param-label">기준 수요 (Q₀) <span id="lbl_q0">100</span> 개/일</div>
+        <div class="param-sub">기준 가격에서의 하루 판매량</div>
+        <input type="range" id="q0" min="20" max="500" step="5" value="100" />
+      </div>
+      <div class="param-row">
+        <div class="param-label">기준 가격 (P₀) <span id="lbl_p0">10,000</span> 원</div>
+        <div class="param-sub">수요 측정 당시의 가격</div>
+        <input type="range" id="p0" min="1000" max="50000" step="500" value="10000" />
+      </div>
+      <div class="param-row">
+        <div class="param-label">가격 탄력성 (ε) <span id="lbl_eps">-1.5</span></div>
+        <div class="param-sub">가격 1% 상승 시 수요 변화율 (%)</div>
+        <input type="range" id="eps" min="-4" max="-0.1" step="0.05" value="-1.5" />
+      </div>
+    </div>
+
+    <div class="param-group">
+      <div class="section-title">비용 구조</div>
+      <div class="param-row">
+        <div class="param-label">단위 변동비 (c) <span id="lbl_vc">4,000</span> 원</div>
+        <div class="param-sub">재료비, 포장비 등 개당 원가</div>
+        <input type="range" id="vc" min="0" max="40000" step="200" value="4000" />
+      </div>
+      <div class="param-row">
+        <div class="param-label">일일 고정비 (F) <span id="lbl_fc">150,000</span> 원</div>
+        <div class="param-sub">임대료, 인건비 등 하루 고정 지출</div>
+        <input type="range" id="fc" min="0" max="1000000" step="5000" value="150000" />
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:8px">최적 결과</div>
+
+    <div class="result-card highlight">
+      <div class="label">최적 가격 (P*)</div>
+      <div class="value blue" id="res_price">—</div>
+      <div class="sub" id="res_markup">—</div>
+    </div>
+    <div class="result-card">
+      <div class="label">해당 가격에서 예상 수요</div>
+      <div class="value" id="res_qty">—</div>
+    </div>
+    <div class="result-card">
+      <div class="label">최대 일일 이익</div>
+      <div class="value green" id="res_profit">—</div>
+    </div>
+    <div class="result-card">
+      <div class="label">매출 대비 이익률</div>
+      <div class="value" id="res_margin">—</div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">모델 수식</div>
+    <div class="formula-box">
+      <span class="hi">수요 곡선</span><br>
+      Q(P) = Q₀ · (P / P₀)<sup>ε</sup><br><br>
+      <span class="hi">이익 함수</span><br>
+      π(P) = (P − c) · Q(P) − F<br><br>
+      <span class="hi">해석적 최적해</span><br>
+      P* = c · ε / (ε + 1)
+    </div>
+  </div>
+
+  <!-- ── 차트 영역 ── -->
+  <div class="chart-area">
+    <div class="chart-wrap" style="flex: 2; min-height: 340px;">
+      <div class="chart-title">가격별 매출 · 비용 · 이익 (일일 기준)</div>
+      <canvas id="mainChart"></canvas>
+    </div>
+
+    <div class="grid2">
+      <div class="chart-wrap" style="min-height: 220px;">
+        <div class="chart-title">가격별 예상 수요량</div>
+        <canvas id="demandChart"></canvas>
+      </div>
+      <div class="chart-wrap" style="min-height: 220px;">
+        <div class="chart-title">이익 곡선 (최적점 강조)</div>
+        <canvas id="profitChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="insight-box">
+        <h3>모델 해석</h3>
+        <div class="insight-item"><div class="dot"></div><span id="ins1">—</span></div>
+        <div class="insight-item"><div class="dot"></div><span id="ins2">—</span></div>
+        <div class="insight-item"><div class="dot"></div><span id="ins3">—</span></div>
+      </div>
+      <div class="insight-box">
+        <h3>이론 배경 · 참고문헌</h3>
+        <div class="ref-list">
+          <div>· Dolan & Simon (1996). <em>Power Pricing.</em> Free Press.</div>
+          <div>· Nagle & Müller (2018). <em>The Strategy and Tactics of Pricing.</em> Routledge.</div>
+          <div>· Lerner Index: (P−MC)/P = −1/ε</div>
+          <div>· 탄력성 추정: van Westendorp PSM 또는 Conjoint 분석 권장</div>
+          <div style="margin-top:8px; color:#334155">수식 출처: 미시경제학 독점 가격 결정 이론(Monopoly pricing, MR=MC)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ── 유틸 ──────────────────────────────────────────
+const fmt  = v => v.toLocaleString('ko-KR');
+const fmtW = v => fmt(Math.round(v)) + ' 원';
+const fmtQ = v => fmt(Math.round(v)) + ' 개';
+const fmtPct = v => (v * 100).toFixed(1) + '%';
+
+// ── 모델 ──────────────────────────────────────────
+function demand(P, q0, p0, eps) {
+  return q0 * Math.pow(P / p0, eps);
+}
+function profit(P, q0, p0, eps, vc, fc) {
+  return (P - vc) * demand(P, q0, p0, eps) - fc;
+}
+// 해석적 최적해 (탄력성 < -1일 때 존재)
+function analyticalOptimal(vc, eps) {
+  if (eps >= -1) return null;
+  return vc * eps / (eps + 1);
+}
+// 수치 최적화 (ε ≥ -1 fallback + 범위 확인)
+function numericalOptimal(q0, p0, eps, vc, fc, pMax) {
+  let bestP = vc + 1, bestPi = -Infinity;
+  const steps = 2000;
+  for (let i = 1; i <= steps; i++) {
+    const P = vc + (i / steps) * (pMax - vc);
+    const pi = profit(P, q0, p0, eps, vc, fc);
+    if (pi > bestPi) { bestPi = pi; bestP = P; }
+  }
+  return bestP;
+}
+
+// ── Chart 인스턴스 ──────────────────────────────────
+let mainChart, demandChart, profitChart;
+
+function makeChart(id, cfg) {
+  return new Chart(document.getElementById(id).getContext('2d'), cfg);
+}
+
+const GRID_COLOR = '#1e2330';
+const TEXT_COLOR = '#64748b';
+const baseOpts = {
+  responsive: true,
+  animation: { duration: 300 },
+  plugins: { legend: { labels: { color: TEXT_COLOR, font: { size: 11 }, boxWidth: 12 } } },
+  scales: {
+    x: { ticks: { color: TEXT_COLOR, font: { size: 10 } }, grid: { color: GRID_COLOR } },
+    y: { ticks: { color: TEXT_COLOR, font: { size: 10 } }, grid: { color: GRID_COLOR } }
+  }
+};
+
+function initCharts() {
+  mainChart = makeChart('mainChart', {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: '매출', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0.4, pointRadius: 0 },
+      { label: '총비용', data: [], borderColor: '#f87171', backgroundColor: 'transparent', tension: 0.4, borderDash: [4,3], pointRadius: 0 },
+      { label: '이익', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.06)', fill: true, tension: 0.4, pointRadius: 0 },
+    ]},
+    options: { ...baseOpts }
+  });
+  demandChart = makeChart('demandChart', {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: '수요량', data: [], borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.08)', fill: true, tension: 0.4, pointRadius: 0 },
+    ]},
+    options: { ...baseOpts }
+  });
+  profitChart = makeChart('profitChart', {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: '이익', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.06)', fill: true, tension: 0.4, pointRadius: 0 },
+      { label: '최적점', data: [], borderColor: '#fbbf24', backgroundColor: '#fbbf24', type: 'scatter', pointRadius: 8, pointHoverRadius: 10 },
+    ]},
+    options: { ...baseOpts }
+  });
+}
+
+// ── 메인 업데이트 ──────────────────────────────────
+function update() {
+  const q0  = +document.getElementById('q0').value;
+  const p0  = +document.getElementById('p0').value;
+  const eps = +document.getElementById('eps').value;
+  const vc  = +document.getElementById('vc').value;
+  const fc  = +document.getElementById('fc').value;
+
+  // 라벨 갱신
+  document.getElementById('lbl_q0').textContent  = fmt(q0);
+  document.getElementById('lbl_p0').textContent  = fmt(p0);
+  document.getElementById('lbl_eps').textContent = eps.toFixed(2);
+  document.getElementById('lbl_vc').textContent  = fmt(vc);
+  document.getElementById('lbl_fc').textContent  = fmt(fc);
+
+  // 가격 범위 설정
+  const pMax = Math.max(p0 * 4, vc * 10, 20000);
+  const pMin = Math.max(vc * 1.01, 100);
+  const STEPS = 200;
+  const prices = Array.from({ length: STEPS }, (_, i) => pMin + (i / (STEPS - 1)) * (pMax - pMin));
+
+  // 최적 가격
+  let pStar = analyticalOptimal(vc, eps);
+  if (!pStar || pStar < pMin || pStar > pMax) {
+    pStar = numericalOptimal(q0, p0, eps, vc, fc, pMax);
+  }
+
+  const qStar = demand(pStar, q0, p0, eps);
+  const piStar = profit(pStar, q0, p0, eps, vc, fc);
+  const revStar = pStar * qStar;
+  const marginStar = piStar / revStar;
+  const markupPct  = ((pStar - vc) / vc * 100).toFixed(1);
+
+  // 결과 표시
+  document.getElementById('res_price').textContent  = fmtW(pStar);
+  document.getElementById('res_markup').textContent = `원가 대비 ${markupPct}% 마진`;
+  document.getElementById('res_qty').textContent    = fmtQ(qStar);
+  document.getElementById('res_profit').textContent = fmtW(piStar);
+  document.getElementById('res_margin').textContent = fmtPct(marginStar > 0 ? marginStar : 0);
+
+  // 인사이트
+  const lerner = (-1 / eps).toFixed(2);
+  document.getElementById('ins1').textContent =
+    `Lerner 지수 ${lerner}: 시장 지배력이 ${+lerner > 0.4 ? '상대적으로 높습니다' : '낮아 경쟁이 치열한 시장입니다'}.`;
+  document.getElementById('ins2').textContent =
+    eps >= -1
+      ? `탄력성 ${eps.toFixed(2)}: 비탄력적 수요 — 가격 인상이 매출에 유리합니다.`
+      : `탄력성 ${eps.toFixed(2)}: 탄력적 수요 — 과도한 가격 인상은 매출 감소로 이어집니다.`;
+  document.getElementById('ins3').textContent =
+    piStar > 0
+      ? `일일 손익분기 수량: ${fmtQ(fc / (pStar - vc))} (현재 예상 수요의 ${(fc / (pStar - vc) / qStar * 100).toFixed(0)}%)`
+      : `현재 파라미터에서 흑자 달성이 어렵습니다. 고정비 절감 또는 가격 재검토가 필요합니다.`;
+
+  // 차트 데이터
+  const lbls   = prices.map(p => (p / 10000).toFixed(1) + '만');
+  const revs   = prices.map(p => p * demand(p, q0, p0, eps));
+  const costs  = prices.map(p => vc * demand(p, q0, p0, eps) + fc);
+  const profits = prices.map(p => profit(p, q0, p0, eps, vc, fc));
+  const qs     = prices.map(p => demand(p, q0, p0, eps));
+
+  function setChart(chart, labels, ...datasets) {
+    chart.data.labels = labels;
+    datasets.forEach((d, i) => { chart.data.datasets[i].data = d; });
+    chart.update('none');
+  }
+
+  setChart(mainChart, lbls, revs, costs, profits);
+  setChart(demandChart, lbls, qs);
+
+  // 이익 차트 + 최적점
+  const optIdx = prices.reduce((bi, p, i) => profits[i] > profits[bi] ? i : bi, 0);
+  profitChart.data.labels = lbls;
+  profitChart.data.datasets[0].data = profits;
+  profitChart.data.datasets[1].data = [{ x: lbls[optIdx], y: profits[optIdx] }];
+  profitChart.update('none');
+}
+
+// ── 초기화 ────────────────────────────────────────
+initCharts();
+update();
+['q0','p0','eps','vc','fc'].forEach(id =>
+  document.getElementById(id).addEventListener('input', update)
+);
+</script>
+</body>
+</html>

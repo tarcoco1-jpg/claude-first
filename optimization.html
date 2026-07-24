@@ -9,7 +9,6 @@
 body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; }
 .layout { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
 
-/* 왼쪽 패널 */
 .panel { padding: 24px 20px; border-right: 1px solid #1e2330; overflow-y: auto; }
 .panel h1 { font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
 .panel .sub { font-size: 0.72rem; color: #475569; margin-bottom: 20px; line-height: 1.5; }
@@ -33,7 +32,6 @@ input[type=range] { width: 100%; accent-color: #3b82f6; height: 3px; cursor: poi
 .formula { background: #0d1117; border: 1px solid #1e2330; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.72rem; color: #64748b; line-height: 1.9; margin-top: 6px; }
 .formula span { color: #7dd3fc; }
 
-/* 오른쪽 차트 영역 */
 .charts { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
 .card { background: #141820; border: 1px solid #1e2330; border-radius: 10px; padding: 16px 18px; }
 .card-title { font-size: 0.72rem; color: #64748b; margin-bottom: 10px; }
@@ -48,20 +46,23 @@ canvas { display: block; width: 100%; }
 .insight h3 { font-size: 0.72rem; color: #64748b; margin-bottom: 10px; }
 .ins-item { display: flex; gap: 8px; margin-bottom: 8px; font-size: 0.77rem; color: #cbd5e1; line-height: 1.5; }
 .ins-item::before { content: '·'; color: #3b82f6; font-weight: 700; flex-shrink: 0; }
-
 .refs { font-size: 0.7rem; color: #475569; line-height: 1.9; }
+
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  .panel { border-right: none; border-bottom: 1px solid #1e2330; }
+  .grid2 { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
 <div class="layout">
 
-<!-- 왼쪽 -->
 <div class="panel">
   <h1>최적 가격 찾기</h1>
   <div class="sub">가격 탄력성 기반 이익 극대화 모델<br>슬라이더를 조정하면 실시간으로 갱신됩니다</div>
 
   <div class="sec">수요 파라미터</div>
-
   <div class="row">
     <div class="row-top">기준 수요 Q₀ <b><span id="lq0">100</span> 개/일</b></div>
     <div class="row-hint">기준 가격에서의 하루 판매량</div>
@@ -79,7 +80,6 @@ canvas { display: block; width: 100%; }
   </div>
 
   <div class="sec">비용 구조</div>
-
   <div class="row">
     <div class="row-top">단위 변동비 c <b><span id="lvc">4,000</span> 원</b></div>
     <div class="row-hint">재료비, 포장비 등 개당 원가</div>
@@ -92,7 +92,6 @@ canvas { display: block; width: 100%; }
   </div>
 
   <div class="sec">최적 결과</div>
-
   <div class="result hl">
     <div class="rlabel">최적 가격 P*</div>
     <div class="rval blue" id="rp">—</div>
@@ -122,7 +121,6 @@ canvas { display: block; width: 100%; }
   </div>
 </div>
 
-<!-- 오른쪽 -->
 <div class="charts">
   <div class="card">
     <div class="card-title">가격별 매출 · 총비용 · 이익</div>
@@ -159,8 +157,8 @@ canvas { display: block; width: 100%; }
         · Nagle &amp; Müller (2018). <em>Tactics of Pricing.</em><br>
         · Lerner Index: (P−MC)/P = −1/ε<br>
         · 탄력성 추정: van Westendorp PSM<br>
-          또는 Conjoint 분석 권장<br>
-        · 수식: 미시경제학 MR=MC 조건
+        &nbsp;&nbsp;또는 Conjoint 분석 권장<br>
+        · 수식 근거: 미시경제학 MR=MC 조건
       </div>
     </div>
   </div>
@@ -168,7 +166,6 @@ canvas { display: block; width: 100%; }
 
 </div>
 <script>
-// ── 헬퍼 ──
 const fmt  = n => Math.round(n).toLocaleString('ko-KR');
 const fmtW = n => fmt(n) + ' 원';
 const fmtQ = n => fmt(n) + ' 개';
@@ -177,41 +174,39 @@ const fmtP = n => (n * 100).toFixed(1) + '%';
 function demand(P, q0, p0, eps) { return q0 * Math.pow(P / p0, eps); }
 function profit(P, q0, p0, eps, vc, fc) { return (P - vc) * demand(P, q0, p0, eps) - fc; }
 
-// ── 캔버스 라인 차트 ──
-function drawChart(canvasId, datasets, opts = {}) {
-  const canvas = document.getElementById(canvasId);
-  const rect   = canvas.parentElement.getBoundingClientRect();
+function drawChart(id, datasets, opts) {
+  opts = opts || {};
+  const canvas = document.getElementById(id);
+  const wrap   = canvas.parentElement;
   const dpr    = window.devicePixelRatio || 1;
-  const W = (rect.width - 36) * dpr;
-  const H = canvas.height * dpr;
-  canvas.width  = W;
-  canvas.height = H;
-  canvas.style.width  = (rect.width - 36) + 'px';
-  canvas.style.height = canvas.height + 'px'; // keep original CSS height
+  const cssW   = wrap.clientWidth - 36;
+  const cssH   = parseInt(canvas.getAttribute('height')) || 200;
+  canvas.width  = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
 
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
-  const cw = W / dpr, ch = H / dpr;
-
-  const PAD = { top: 12, right: 16, bottom: 30, left: 56 };
+  const cw = cssW, ch = cssH;
+  const PAD = { top: 12, right: 16, bottom: 28, left: 58 };
   const pw = cw - PAD.left - PAD.right;
   const ph = ch - PAD.top - PAD.bottom;
 
-  // 배경
   ctx.fillStyle = '#141820';
   ctx.fillRect(0, 0, cw, ch);
 
-  // 모든 값의 범위
-  const allVals = datasets.flatMap(d => d.data);
+  const allVals = datasets.filter(d => !d.type).flatMap(d => d.data);
   let yMin = opts.yMin !== undefined ? opts.yMin : Math.min(...allVals);
   let yMax = Math.max(...allVals);
   if (yMin === yMax) { yMin -= 1; yMax += 1; }
-  const xLen = datasets[0].data.length;
+  const N = datasets.filter(d => !d.type)[0].data.length;
+  const xLabels = opts.xLabels || [];
 
-  const xScale = i => PAD.left + (i / (xLen - 1)) * pw;
-  const yScale = v => PAD.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
+  const xS = i => PAD.left + (i / (N - 1)) * pw;
+  const yS = v => PAD.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
 
-  // 그리드
+  // grid
   ctx.strokeStyle = '#1e2330';
   ctx.lineWidth = 1;
   for (let t = 0; t <= 4; t++) {
@@ -221,60 +216,57 @@ function drawChart(canvasId, datasets, opts = {}) {
     ctx.fillStyle = '#334155';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(fmt(val), PAD.left - 4, y + 3);
-  }
-  // x축 레이블
-  ctx.fillStyle = '#334155';
-  ctx.font = '9px sans-serif';
-  ctx.textAlign = 'center';
-  const xTicks = 5;
-  for (let t = 0; t <= xTicks; t++) {
-    const i = Math.round(t / xTicks * (xLen - 1));
-    const x = xScale(i);
-    if (opts.xLabels) ctx.fillText(opts.xLabels[i], x, ch - 6);
+    const label = Math.abs(val) >= 10000 ? (val / 10000).toFixed(1) + '만' : fmt(val);
+    ctx.fillText(label, PAD.left - 4, y + 3);
   }
 
-  // 0선
+  // x labels
+  if (xLabels.length) {
+    ctx.fillStyle = '#334155';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    for (let t = 0; t <= 5; t++) {
+      const i = Math.round(t / 5 * (N - 1));
+      ctx.fillText(xLabels[i], xS(i), ch - 6);
+    }
+  }
+
+  // zero line
   if (yMin < 0 && yMax > 0) {
-    const y0 = yScale(0);
+    const y0 = yS(0);
     ctx.strokeStyle = '#2d3748';
     ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD.left, y0); ctx.lineTo(PAD.left + pw, y0); ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  // 선 그리기
+  // lines
   datasets.forEach(ds => {
     if (ds.type === 'point') {
-      // 최적점 마커
       ds.data.forEach(pt => {
-        const x = xScale(pt.i), y = yScale(pt.v);
+        const x = xS(pt.i), y = yS(pt.v);
         ctx.beginPath();
         ctx.arc(x, y, 6, 0, Math.PI * 2);
         ctx.fillStyle = ds.color;
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px sans-serif';
+        ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('★', x, y + 3);
+        ctx.fillText('★', x, y + 3.5);
       });
       return;
     }
     ctx.beginPath();
     ctx.strokeStyle = ds.color;
-    ctx.lineWidth = ds.width || 2;
+    ctx.lineWidth = ds.width || 1.8;
     if (ds.dash) ctx.setLineDash(ds.dash);
-    ds.data.forEach((v, i) => {
-      const x = xScale(i), y = yScale(v);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
+    ds.data.forEach((v, i) => { i === 0 ? ctx.moveTo(xS(i), yS(v)) : ctx.lineTo(xS(i), yS(v)); });
     ctx.stroke();
     ctx.setLineDash([]);
-
-    // fill
     if (ds.fill) {
-      ctx.lineTo(xScale(xLen - 1), yScale(Math.max(yMin, 0)));
-      ctx.lineTo(xScale(0), yScale(Math.max(yMin, 0)));
+      ctx.lineTo(xS(N - 1), yS(Math.max(yMin, 0)));
+      ctx.lineTo(xS(0), yS(Math.max(yMin, 0)));
       ctx.closePath();
       ctx.fillStyle = ds.fill;
       ctx.fill();
@@ -282,7 +274,6 @@ function drawChart(canvasId, datasets, opts = {}) {
   });
 }
 
-// ── 메인 업데이트 ──
 function update() {
   const q0  = +document.getElementById('q0').value;
   const p0  = +document.getElementById('p0').value;
@@ -296,34 +287,31 @@ function update() {
   document.getElementById('lvc').textContent  = fmt(vc);
   document.getElementById('lfc').textContent  = fmt(fc);
 
-  // 가격 범위
   const pMin = Math.max(vc * 1.01 + 1, 100);
   const pMax = Math.max(p0 * 5, vc * 12, 30000);
   const N = 200;
   const prices = Array.from({ length: N }, (_, i) => pMin + (i / (N - 1)) * (pMax - pMin));
 
-  // 최적가격 (해석적 + 수치 보정)
   let pStar = (eps < -1) ? vc * eps / (eps + 1) : null;
   if (!pStar || pStar < pMin || pStar > pMax) {
     pStar = prices.reduce((best, p) =>
       profit(p, q0, p0, eps, vc, fc) > profit(best, q0, p0, eps, vc, fc) ? p : best, pMin);
   }
 
-  const qStar  = demand(pStar, q0, p0, eps);
-  const piStar = profit(pStar, q0, p0, eps, vc, fc);
+  const qStar   = demand(pStar, q0, p0, eps);
+  const piStar  = profit(pStar, q0, p0, eps, vc, fc);
   const revStar = pStar * qStar;
   const margin  = revStar > 0 ? piStar / revStar : 0;
-  const markup  = vc > 0 ? ((pStar - vc) / vc * 100).toFixed(1) : '—';
+  const markup  = vc > 0 ? ((pStar - vc) / vc * 100).toFixed(1) : null;
 
-  document.getElementById('rp').textContent     = fmtW(pStar);
-  document.getElementById('rmarkup').textContent = vc > 0 ? `원가 대비 +${markup}%` : '';
-  document.getElementById('rq').textContent     = fmtQ(qStar);
-  document.getElementById('rpi').textContent    = fmtW(piStar);
-  document.getElementById('rmarg').textContent  = fmtP(Math.max(margin, 0));
+  document.getElementById('rp').textContent      = fmtW(pStar);
+  document.getElementById('rmarkup').textContent = markup ? `원가 대비 +${markup}%` : '';
+  document.getElementById('rq').textContent      = fmtQ(qStar);
+  document.getElementById('rpi').textContent     = fmtW(piStar);
+  document.getElementById('rmarg').textContent   = fmtP(Math.max(margin, 0));
 
-  // 인사이트
   const lerner = (-1 / eps).toFixed(2);
-  const bep    = vc < pStar ? fc / (pStar - vc) : null;
+  const bep    = (vc < pStar) ? fc / (pStar - vc) : null;
   document.getElementById('ins1').textContent =
     `Lerner 지수 ${lerner} — 시장 지배력이 ${+lerner > 0.4 ? '비교적 높음' : '낮은 경쟁 시장'}.`;
   document.getElementById('ins2').textContent =
@@ -331,19 +319,16 @@ function update() {
       ? `탄력성 ${eps.toFixed(2)}: 비탄력적 수요 → 가격 인상이 매출에 유리.`
       : `탄력성 ${eps.toFixed(2)}: 탄력적 수요 → 과도한 인상은 판매량 급감.`;
   document.getElementById('ins3').textContent =
-    piStar > 0 && bep
+    (piStar > 0 && bep)
       ? `손익분기 수량 ${fmtQ(bep)} (예상 수요의 ${(bep / qStar * 100).toFixed(0)}%)`
       : '현재 파라미터에서 흑자 달성 어려움 — 고정비 절감 또는 가격 재검토 필요.';
 
-  // 데이터
   const revs    = prices.map(p => p * demand(p, q0, p0, eps));
   const costs   = prices.map(p => vc * demand(p, q0, p0, eps) + fc);
   const profits = prices.map(p => profit(p, q0, p0, eps, vc, fc));
   const qs      = prices.map(p => demand(p, q0, p0, eps));
   const xLabels = prices.map(p => (p / 10000).toFixed(1) + '만');
-
-  // 최적점 인덱스
-  const optIdx = profits.reduce((bi, v, i) => v > profits[bi] ? i : bi, 0);
+  const optIdx  = profits.reduce((bi, v, i) => v > profits[bi] ? i : bi, 0);
 
   drawChart('c1', [
     { data: revs,    color: '#3b82f6', fill: 'rgba(59,130,246,0.07)' },
@@ -361,7 +346,6 @@ function update() {
   ], { xLabels, yMin: Math.min(0, ...profits) });
 }
 
-// 초기화
 update();
 ['q0','p0','eps','vc','fc'].forEach(id =>
   document.getElementById(id).addEventListener('input', update));
